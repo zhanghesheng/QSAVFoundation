@@ -18,6 +18,8 @@
 @property (nonatomic, strong)UIView                     *cameraView;
 @property (nonatomic, strong)dispatch_queue_t           viewQuewe;
 
+@property (nonatomic, strong)UIButton               *thumbnail;
+
 @property (nonatomic, strong) UIButton *captureButton;
 @property (nonatomic, strong) UIButton *switchCamerasButton;
 
@@ -41,8 +43,11 @@
     [self.cameraView addSubview:self.captureButton];
     [self.cameraView addSubview:self.switchCamerasButton];
     _adjustingExposureContext = @"";
-    
     [self.view addSubview:self.focusMarker];
+    [self.view addSubview:self.exposureMarker];
+    [self.view addSubview:self.resetMarker];
+    [self.view addSubview:self.thumbnail];
+    
 }
 
 #pragma mark - 回话相关
@@ -181,6 +186,16 @@
     }];
 }
 
+
+- (void) setPhotoThumbnail:(UIImage *) image{
+    
+  dispatch_async(dispatch_get_main_queue(), ^{
+      [self.thumbnail setBackgroundImage:image forState:UIControlStateNormal];
+      self.thumbnail.layer.borderColor = [UIColor whiteColor].CGColor;
+      self.thumbnail.layer.borderWidth = 1.0;
+  });
+}
+
 // 获取的图片保存的照片库
 - (void)savePhotoToLibrary:(UIImage *)image{
     PHPhotoLibrary * phlibary = [PHPhotoLibrary sharedPhotoLibrary];
@@ -188,6 +203,7 @@
         [PHAssetChangeRequest creationRequestForAssetFromImage:image];
     } completionHandler:^(BOOL success, NSError * _Nullable error) {
         if (success) {
+            [self setPhotoThumbnail:image];
         }
     }];
 }
@@ -298,8 +314,9 @@
         CGPoint ponit = [gesture locationInView:self.cameraView];
         // 将点击的位置左边转化为设备的坐标系统位置
         CGPoint pointOfInterest = [self.previewLayer captureDevicePointOfInterestForPoint:ponit];
-        
+        [self showMarkerAtPoint:ponit andMarker:self.exposureMarker];
         [self focusAtPoint:pointOfInterest];
+        
         
     }
 }
@@ -315,6 +332,10 @@
     BOOL canResetExposure = device.isExposurePointOfInterestSupported && [device isExposureModeSupported:exposureMode];
     CGPoint center = CGPointMake(.5, .5);
     
+    if (canResetFocus || canResetExposure) {
+        CGPoint centerPoint = [self.previewLayer pointForCaptureDevicePointOfInterest:center];
+        [self showMarkerAtPoint:centerPoint andMarker:self.resetMarker];
+    }
     @try {
         [device lockForConfiguration:nil];
         if (canResetFocus) {
@@ -367,6 +388,31 @@
     return _focusMarker;
 }
 
+- (UIImageView *)exposureMarker{
+    if (!_exposureMarker) {
+        _exposureMarker = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"Exposure_Point"]];
+        _exposureMarker.hidden = YES;
+    }
+    return _exposureMarker;
+}
+
+- (UIImageView *)resetMarker{
+    if (!_resetMarker) {
+        _resetMarker = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"Reset_Point"]];
+        _resetMarker.hidden = YES;
+    }
+    return _resetMarker;
+}
+
+- (UIButton *)thumbnail{
+    if (!_thumbnail) {
+        _thumbnail = [UIButton buttonWithType:UIButtonTypeCustom];
+        _thumbnail.frame = CGRectMake(36, self.view.frame.size.height - 45 - 25, 45, 45);
+        _thumbnail.backgroundColor = [UIColor blueColor];
+    }
+    return _thumbnail;
+}
+
 - (UIButton *)captureButton{
     if (!_captureButton) {
         _captureButton = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -391,6 +437,7 @@
     }
     return _switchCamerasButton;
 }
+
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
